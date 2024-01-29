@@ -866,3 +866,63 @@ resource "juju_integration" "ldap-to-keystone" {
     endpoint = "domain-config"
   }
 }
+
+resource "juju_application" "tempest" {
+  count = var.enable-validation ? 1 : 0
+  name  = "tempest"
+  model = juju_model.sunbeam.name
+
+  charm {
+    name     = "tempest-k8s"
+    channel  = var.tempest-channel == null ? var.openstack-channel : var.tempest-channel
+    revision = var.tempest-revision
+  }
+
+  units  = 1
+  config = var.tempest-config
+}
+
+resource "juju_integration" "tempest-to-keystone" {
+  count = var.enable-validation ? 1 : 0
+  model = juju_model.sunbeam.name
+
+  application {
+    name     = module.keystone.name
+    endpoint = "identity-ops"
+  }
+
+  application {
+    name     = juju_application.tempest[count.index].name
+    endpoint = "identity-ops"
+  }
+}
+
+resource "juju_integration" "tempest-to-grafana-agent-k8s-loki" {
+  count = (var.enable-validation && var.logging-provider != "") ? 1 : 0
+  model = juju_model.sunbeam.name
+
+  application {
+    name     = juju_application.tempest[count.index].name
+    endpoint = "logging"
+  }
+
+  application {
+    name     = var.grafana-agent-k8s-name
+    endpoint = var.logging-provider
+  }
+}
+
+resource "juju_integration" "tempest-to-grafana-agent-k8s-grafana" {
+  count = (var.enable-validation && var.grafana-dashboards-consumer != "") ? 1 : 0
+  model = juju_model.sunbeam.name
+
+  application {
+    name     = juju_application.tempest[count.index].name
+    endpoint = "grafana-dashboard"
+  }
+
+  application {
+    name     = var.grafana-agent-k8s-name
+    endpoint = var.grafana-dashboards-consumer
+  }
+}
